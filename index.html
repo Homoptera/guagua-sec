@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>呱呱色谱峰小工具</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+  <style>
+    body {
+      font-family: "Microsoft YaHei", sans-serif;
+      margin: 20px;
+      line-height: 1.6;
+      color: #000000;
+    }
+    h1 { 
+      text-align: center;
+      font-size: 24px;
+      margin: 10px 0; 
+    }
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    #chart-container { 
+      width: 762px; 
+      height: 508px; 
+      margin: 20px 0;
+      position: relative;
+      cursor: crosshair;
+    }
+    #chart-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    #result-container {
+      width: 300px;
+      padding: 15px;
+      border-radius: 5px;
+      height: 500px;
+      overflow-y: auto;
+      margin-top: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    #selection-box {
+      position: absolute;
+      border: 2px dashed #FA6093;
+      background: rgba(253, 207, 228, 0.1);
+      display: none;
+      pointer-events: none;
+    }
+    button { 
+      padding: 8px 15px; 
+      background: #151515; 
+      color: white; 
+      border: none; 
+      border-radius: 4px; 
+      cursor: pointer; 
+      margin-left: 10px;
+      transition: all 0.2s;
+    }
+    button:hover { background: #333333; transform: translateY(-1.2px); }
+    button:disabled { 
+      background: #cccccc; 
+      cursor: not-allowed; 
+    }
+    .loader { 
+      display: none; 
+      border: 4px solid #f3f3f3; 
+      border-top: 4px solid #FA588E; 
+      border-radius: 50%; 
+      width: 30px; 
+      height: 30px; 
+      animation: spin 1s linear infinite; 
+      margin: 10px auto; 
+    }
+    @keyframes spin { 
+      0% { transform: rotate(0deg); } 
+      100% { transform: rotate(360deg); } 
+    }
+    .card {
+      background: white;
+      padding: 12px;
+      border-radius: 5px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1); 
+      margin-bottom: 8px;
+      transition: all 0.2s;
+    }
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
+    }
+    .error-card {
+      background: #ffebee;
+    }
+    .success-card {
+      background: #FEEEF5;
+    }
+    .warning-card {
+      background: #EEFCFE;
+    }
+    .control-row {
+      display: flex;
+      align-items: center;
+      margin: 15px 0;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .file-input-container {
+      display: inline-flex;
+      align-items: center;
+      height: 36px;
+      border-radius: 4px;
+      overflow: hidden;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .file-input-btn {
+      background: #151515;
+      color: white;
+      padding: 8px 20px;
+      border: none;
+      border-radius: 4px 0 0 4px;
+      cursor: pointer;
+      font-family: "Microsoft YaHei", sans-serif;
+      font-size: 14px;
+      transition: all 0.3s;
+      height: 100%;
+      display: inline-flex;
+      align-items: center;
+    }
+    .file-input-btn:hover {
+      background: #414141;
+    }
+    .file-name-display {
+      background: white;
+      font-size: 14px;
+      padding: 0 20px 0 25px;
+      border: 1px solid #ddd;
+      border-left: none;
+      border-radius: 0 4px 4px 0;
+      height: 100%;
+      display: inline-flex;
+      align-items: center;
+      min-width: 150px;
+      max-width: 250px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .hidden-file-input {
+      display: none;
+    }
+    /* D3图表样式 */
+    .axis path,
+    .axis line {
+      stroke: #000000;
+      stroke-width: 3;
+      shape-rendering: crispEdges;
+    }
+    .axis text {
+      font-family: Arial;
+      font-size: 20px;
+      font-weight: bold;
+      fill: #000000;
+    }
+    .data-line {
+      stroke: #000000;
+      stroke-width: 3;
+      fill: none;
+    }
+    .baseline {
+      stroke: #9E9E9E;
+      stroke-width: 1;
+      stroke-dasharray: 5, 5;
+    }
+    .analysis-area {
+      fill: rgba(189, 255, 255, 0.4);
+      stroke: none;
+    }
+    .peak-point {
+      fill: #FF5252;
+      stroke: none;
+    }
+    .threshold-line {
+      stroke: #FF9800;
+      stroke-width: 1.5;
+      stroke-dasharray: 5, 3;
+    }
+    .vertical-line {
+      stroke: #FF9800;
+      stroke-width: 1.5;
+      stroke-dasharray: 5, 3;
+    }
+    .left-edge {
+      fill: #2196F3;
+      stroke: none;
+    }
+    .right-edge {
+      fill: #673AB7;
+      stroke: none;
+    }
+    /* 新增样式 */
+    .peak-vertical-line {
+      stroke: #000000;
+      stroke-width: 3;
+      stroke-dasharray: 5, 5;
+    }
+    .peak-horizontal-line {
+      stroke: #000000;
+      stroke-width: 3;
+      stroke-dasharray: 5, 5;
+    }
+    .peak-annotation {
+      font-family: Arial;
+      font-size: 16px;
+      font-weight: bold;
+      fill: #000000;
+    }
+    /* 新增滑动开关样式 */
+    .toggle-switch {
+      display: flex;
+      align-items: center;
+      margin-left: 10px;
+    }
+    .toggle-container {
+      position: relative;
+      width: 200px;
+      height: 36px;
+      margin-left: 66px;
+      margin-right: -36px;
+      background: white;
+      border-radius: 18px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      cursor: pointer;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+    .toggle-container.active {
+      background: #151515;
+    }
+    .toggle-thumb {
+      position: absolute;
+      width: 28px;
+      height: 28px;
+      background: #151515;
+      border-radius: 14px;
+      left: 4px;
+      top: 4px;
+      transition: all 0.3s ease;
+      z-index: 2;
+    }
+    .toggle-container.active .toggle-thumb {
+      left: calc(100% - 32px);
+      background: white;
+    }
+    .toggle-label {
+      position: absolute;
+      width: calc(100% - 40px);
+      text-align: center;
+      font-family: "Microsoft YaHei", sans-serif;
+      font-size: 14px;
+      font-weight: normal;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none;
+      transition: all 0.3s ease;
+    }
+    .toggle-label.left {
+      left: 33px;
+      color: #151515;
+    }
+    .toggle-label.right {
+      right: 33px;
+      color: white;
+      opacity: 0;
+    }
+    .toggle-container.active .toggle-label.left {
+      opacity: 0;
+    }
+    .toggle-container.active .toggle-label.right {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <h1>呱呱帮你画色谱峰</h1>
+
+  <div class="control-row">
+    <div class="file-input-container">
+      <label for="fileInput" class="file-input-btn">选择文件</label>
+      <span id="fileNameDisplay" class="file-name-display">最聪明厉害的萱萱又来分析啦！</span>
+      <input type="file" id="fileInput" accept=".csv" class="hidden-file-input">
+    </div>
+    <button id="selectBtn" disabled>开始框选</button>
+    <button id="calculateBtn" disabled>计算拖尾因子</button>
+    <button id="resetBtn" disabled>重置分析</button>
+    
+    <!-- 替换为滑动开关 -->
+    <div class="toggle-switch">
+      <div class="toggle-container active" id="toggleTailingLines">
+        <div class="toggle-thumb"></div>
+        <span class="toggle-label left">显示拖尾因子辅助线</span>
+        <span class="toggle-label right">隐藏拖尾因子辅助线</span>
+      </div>
+    </div>
+    
+    <div class="toggle-switch">
+      <div class="toggle-container active" id="togglePeakAnnotation">
+        <div class="toggle-thumb"></div>
+        <span class="toggle-label left">显示产物峰标注</span>
+        <span class="toggle-label right">隐藏产物峰标注</span>
+      </div>
+    </div>
+  </div>
+  
+  <div class="loader" id="loader"></div>
+  
+  <div class="container">
+    <div id="chart-container">
+      <svg id="chart-svg" viewBox="0 0 762 508" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div id="selection-box"></div>
+    </div>
+    
+    <div id="result-container">
+      <div class="card">
+        <p>请点击“选择文件”上传好东西喵</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 核心变量
+    let peakData = [];
+    let isSelecting = false;
+    let selectionStart = { x: 0, y: 0 };
+    let selectedRange = null;
+    let chartArea = null;
+    let xScale, yScale;
+    let chartGroup;
+    let svg;
+    const margin = {top: 40, right: 130, bottom: 160, left: 140};
+    
+    // 新增变量
+    let showTailingLines = true;
+    let showPeakAnnotation = true;
+    let peakAnnotationGroup;
+    let tailingLinesGroup;
+    let baselineValue = 0;
+
+    // 文件上传与解析
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      const fileNameDisplay = document.getElementById('fileNameDisplay');
+      
+      if (file) {
+        fileNameDisplay.textContent = file.name;
+        
+        showLoading("让我看看...");
+        
+        Papa.parse(file, {
+          header: false,
+          skipEmptyLines: true,
+          complete: function(results) {
+            peakData = results.data
+              .filter(row => row.length >= 4)
+              .map((row, index) => ({
+                id: index,
+                mL: parseFloat(row[1]),
+                value: parseFloat(row[3])
+              }))
+              .filter(point => !isNaN(point.mL) && !isNaN(point.value));
+
+            if (peakData.length < 3) {
+              showError("数据不足喵，至少需要3个有效数据点");
+              return;
+            }
+
+            // 重置开关状态
+            resetToggleButtons();
+            
+            hideLoading();
+            initChart(peakData);
+            enableButtons();
+            updateResult(`
+              <div class="card success-card">
+                画好了喵，请直接在图表上框选产物峰区域
+              </div>
+            `);
+            // 自动进入框选模式
+            startSelection();
+          },
+          error: function(err) {
+            showError("文件解析失败：" + err.message);
+          }
+        });
+      } else {
+        fileNameDisplay.textContent = '未选择文件';
+      }
+    });
+
+    // 重置开关状态函数
+    function resetToggleButtons() {
+      const tailingToggle = document.getElementById('toggleTailingLines');
+      const peakToggle = document.getElementById('togglePeakAnnotation');
+      
+      tailingToggle.classList.add('active');
+      peakToggle.classList.add('active');
+      
+      showTailingLines = true;
+      showPeakAnnotation = true;
+      
+      // 确保辅助线显示
+      if (tailingLinesGroup) {
+        tailingLinesGroup.style("display", null);
+      }
+      if (peakAnnotationGroup) {
+        peakAnnotationGroup.style("display", null);
+      }
+    }
+
+    // 图表初始化
+    function initChart(data) {
+      // 清除现有图表
+      clearSVG();
+      
+      // 设置绘图区尺寸
+      const width = 762 - margin.left - margin.right;
+      const height = 508 - margin.top - margin.bottom;
+      
+      // 计算坐标范围
+      const xExtent = d3.extent(data, d => d.mL);
+      const yMax = d3.max(data, d => d.value) * 1.1;
+      const yNegativeOffset = yMax * 0.1;
+      const yExtent = [-yNegativeOffset, yMax];
+      
+      // 计算合适的轴范围和刻度
+      const xRange = { min: 0, max: 28, step: 2 };
+      const yRange = calculateNiceRange(yExtent[0], yExtent[1]);
+      
+      // 创建缩放比例
+      xScale = d3.scaleLinear()
+          .domain([xRange.min, xRange.max])
+          .range([0, width]);
+      
+      yScale = d3.scaleLinear()
+          .domain([yRange.min, yRange.max])
+          .range([height, 0]);
+      
+      // 创建主绘图区
+      svg = d3.select("#chart-svg")
+          .attr("width", 762)
+          .attr("height", 508);
+      
+      chartGroup = svg.append("g")
+          .attr("transform", `translate(${margin.left},${margin.top})`);
+      
+      // 先创建拖尾因子辅助线组（确保在底层）
+      tailingLinesGroup = chartGroup.append("g")
+          .attr("class", "tailing-lines-group");
+      
+      // 创建折线（确保数据线在辅助线上方）
+      const line = d3.line()
+          .x(d => xScale(d.mL))
+          .y(d => yScale(d.value))
+          .curve(d3.curveCatmullRom.alpha(0.1));
+      
+      chartGroup.append("path")
+          .datum(data)
+          .attr("class", "data-line")
+          .attr("d", line);
+      
+      // 创建X轴
+      const xTicks = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28];
+      
+      const xAxis = d3.axisBottom(xScale)
+          .tickValues(xTicks)
+          .tickFormat(d3.format('d')) 
+          .tickSizeOuter(0)
+          .tickSize(10);
+      
+      chartGroup.append("g")
+          .attr("class", "axis line")
+          .attr("transform", `translate(0,${height})`)
+          .call(xAxis)
+          .selectAll("text")
+          .style("text-anchor", "middle");
+      
+      // 创建Y轴
+      const yAxis = d3.axisLeft(yScale)
+          .tickValues(d3.range(0, yRange.max + yRange.step, yRange.step))
+          .tickFormat(d3.format('d')) 
+          .tickSizeOuter(0)
+          .tickSize(10);
+      
+      chartGroup.append("g")
+          .attr("class", "axis line")
+          .call(yAxis);
+      
+      // 添加轴标签
+      svg.append("text")
+          .attr("class", "x-axis-label")
+          .attr("x", width / 2 + margin.left)
+          .attr("y", height + margin.top + 60)
+          .attr("text-anchor", "middle")
+          .text("Volume / mL")
+          .style("font-family", "Arial")
+          .style("font-size", "20px")
+          .style("font-weight", "bold");
+      
+      svg.append("text")
+          .attr("class", "y-axis-label")
+          .attr("transform", "rotate(-90)")
+          .attr("x", -height / 2 - margin.top)
+          .attr("y", 67)
+          .attr("text-anchor", "middle")
+          .text("UV-280 / mAU")
+          .style("font-family", "Arial")
+          .style("font-size", "20px")
+          .style("font-weight", "bold");
+      
+      // 设置chartArea用于后续交互
+      chartArea = {
+        left: margin.left,
+        right: margin.left + width,
+        top: margin.top,
+        bottom: margin.top + height
+      };
+      
+      // 创建产物峰标注组（确保在最上层）
+      peakAnnotationGroup = chartGroup.append("g")
+          .attr("class", "peak-annotation-group");
+    }
+
+    // 清除所有子元素
+    function clearSVG() {
+      const chartSvg = document.getElementById('chart-svg');
+      while (chartSvg.firstChild) {
+        chartSvg.removeChild(chartSvg.firstChild);
+      }
+    }
+    
+    // 计算合适的轴范围和刻度
+    function calculateNiceRange(min, max, isXAxis = false) {
+      const range = max - min;
+      const targetTicks = isXAxis ? 4 : 2;
+      
+      let step = range / targetTicks;
+      const exponent = Math.floor(Math.log10(step));
+      const fraction = step / Math.pow(10, exponent);
+      
+      if (fraction <= 1.5) step = 0.2 * Math.pow(10, exponent);
+      else if (fraction <= 3) step = 0.5 * Math.pow(10, exponent);
+      else if (fraction <= 7) step = 1 * Math.pow(10, exponent);
+      else step = 2 * Math.pow(10, exponent);
+      
+      if (isXAxis && step > range / 5) {
+        step = range / 5;
+        const exp = Math.floor(Math.log10(step));
+        const frac = step / Math.pow(10, exp);
+        if (frac <= 1.5) step = 0.2 * Math.pow(10, exp);
+        else if (frac <= 3) step = 0.5 * Math.pow(10, exp);
+        else if (frac <= 7) step = 1 * Math.pow(10, exp);
+      }
+      
+      let niceMax = Math.ceil(max / step) * step;
+      let niceMin = Math.floor(min / step) * step;
+      
+      if (niceMax - niceMin < range * 0.8) {
+        niceMax = niceMin + Math.ceil(range / step) * step;
+      }
+      
+      if (isXAxis && niceMin < 0 && min >= 0) {
+        niceMin = 0;
+      }
+      
+      return {
+        min: niceMin,
+        max: niceMax,
+        step: step
+      };
+    }
+
+    // 框选交互逻辑
+    document.getElementById('selectBtn').addEventListener('click', startSelection);
+    document.getElementById('resetBtn').addEventListener('click', resetAnalysis);
+    document.getElementById('calculateBtn').addEventListener('click', performAnalysis);
+    
+    // 修改切换按钮事件监听
+    document.getElementById('toggleTailingLines').addEventListener('click', function() {
+      this.classList.toggle('active');
+      toggleTailingLines();
+    });
+    
+    document.getElementById('togglePeakAnnotation').addEventListener('click', function() {
+      this.classList.toggle('active');
+      togglePeakAnnotation();
+    });
+
+    function startSelection() {
+      isSelecting = true;
+      document.getElementById('selection-box').style.display = 'none';
+      updateResult(`
+        <div class="card warning-card">
+          <span>画好了大人，请框选产物峰(*¯︶¯*)</span>
+        </div>
+      `);
+    }
+
+    // 鼠标事件处理
+    const chartContainer = document.getElementById('chart-container');
+    const selectionBox = document.getElementById('selection-box');
+
+    chartContainer.addEventListener('mousedown', (e) => {
+      if (!isSelecting || !chartArea) return;
+      
+      const mousePos = getMousePosition(e);
+      if (!isInChartArea(mousePos)) return;
+
+      selectionStart = mousePos;
+      selectionBox.style.left = mousePos.x + 'px';
+      selectionBox.style.top = mousePos.y + 'px';
+      selectionBox.style.width = '0';
+      selectionBox.style.height = '0';
+      selectionBox.style.display = 'block';
+    });
+
+    chartContainer.addEventListener('mousemove', (e) => {
+      if (!isSelecting || selectionBox.style.display !== 'block') return;
+      
+      const currentPos = getMousePosition(e);
+      const width = currentPos.x - selectionStart.x;
+      const height = currentPos.y - selectionStart.y;
+      
+      selectionBox.style.width = Math.abs(width) + 'px';
+      selectionBox.style.height = Math.abs(height) + 'px';
+      selectionBox.style.left = (width < 0 ? currentPos.x : selectionStart.x) + 'px';
+      selectionBox.style.top = (height < 0 ? currentPos.y : selectionStart.y) + 'px';
+    });
+
+    chartContainer.addEventListener('mouseup', (e) => {
+      if (!isSelecting) return;
+      
+      const endPos = getMousePosition(e);
+      if (!isInChartArea(endPos) || 
+          Math.abs(endPos.x - selectionStart.x) < 10 || 
+          Math.abs(endPos.y - selectionStart.y) < 10) {
+        // 直接重新开始框选，不显示错误
+        selectionBox.style.display = 'none';
+        return;
+      }
+
+      // 转换为SVG坐标
+      const svgRect = document.getElementById('chart-svg').getBoundingClientRect();
+      const containerRect = chartContainer.getBoundingClientRect();
+      
+      const svgX1 = selectionStart.x - (svgRect.left - containerRect.left);
+      const svgX2 = endPos.x - (svgRect.left - containerRect.left);
+      const svgY1 = selectionStart.y - (svgRect.top - containerRect.top);
+      const svgY2 = endPos.y - (svgRect.top - containerRect.top);
+
+      // 转换为数据坐标
+      selectedRange = {
+        mL: {
+          min: xScale.invert(Math.min(svgX1 - margin.left, svgX2 - margin.left)),
+          max: xScale.invert(Math.max(svgX1 - margin.left, svgX2 - margin.left))
+        },
+        value: {
+          min: yScale.invert(Math.max(svgY1 - margin.top, svgY2 - margin.top)),
+          max: yScale.invert(Math.min(svgY1 - margin.top, svgY2 - margin.top))
+        }
+      };
+      
+      isSelecting = false;
+      document.getElementById('calculateBtn').disabled = false;
+      updateResult(`
+        <div class="card success-card">
+          <strong>框到这些喵：</strong><br>
+          mL范围： ${selectedRange.mL.min.toFixed(2)} - ${selectedRange.mL.max.toFixed(2)}<br>
+          吸光度范围： ${selectedRange.value.min.toFixed(2)} - ${selectedRange.value.max.toFixed(2)}
+        </div>
+      `);
+    });
+
+    // 核心分析逻辑
+    function performAnalysis() {
+      if (!selectedRange || !peakData.length) {
+        showError("请先框选目标峰区域");
+        return;
+      }
+
+      showLoading("正在分析...");
+      
+      // 自动隐藏框选框
+      document.getElementById('selection-box').style.display = 'none';
+      
+      setTimeout(() => {
+        try {
+          // 获取框选范围内的点
+          const points = peakData.filter(p => 
+            p.mL >= selectedRange.mL.min && 
+            p.mL <= selectedRange.mL.max
+          );
+
+          if (points.length < 3) {
+            throw new Error("框选范围内数据点不足（至少需要3个点）");
+          }
+
+          // 获取边界值
+          const { baseline, leftValue, rightValue } = getBoundaryValues(
+            points, 
+            selectedRange.mL.min, 
+            selectedRange.mL.max
+          );
+          
+          // 保存基线值用于垂直线绘制
+          baselineValue = baseline;
+
+          // 找到峰顶点
+          const peakPoint = points.reduce((max, p) => 
+            p.value > max.value ? p : max
+          );
+
+          // 验证基线合理性
+          if (baseline >= peakPoint.value * 0.9) {
+            throw new Error(`基线值${baseline}过高，可能误取峰顶`);
+          }
+
+          // 计算5%高度阈值
+          const threshold = baseline + (peakPoint.value - baseline) * 0.05;
+          
+          // 查找边界点
+          const { leftEdge, rightEdge } = findPeakEdges(points, peakPoint, threshold);
+          
+          // 计算并显示结果
+          displayResults(baseline, peakPoint, threshold, leftEdge, rightEdge);
+          
+          // 可视化标记
+          visualizeResults(points, baseline, peakPoint, leftEdge, rightEdge, threshold);
+          
+          // 添加产物峰标注
+          addPeakAnnotation(peakPoint);
+          
+        } catch (e) {
+          console.error("分析错误:", e);
+          showError("分析失败：" + (e.message || "未知错误"));
+          // 分析失败后自动重新开始框选
+          startSelection();
+        } finally {
+          hideLoading();
+        }
+      }, 100);
+    }
+
+    // 关键函数
+    function getBoundaryValues(points, mL_min, mL_max) {
+      // 找到最接近左边界的点
+      const leftPoint = points.reduce((closest, p) => 
+        Math.abs(p.mL - mL_min) < Math.abs(closest.mL - mL_min) ? p : closest
+      );
+      
+      // 找到最接近右边界的点
+      const rightPoint = points.reduce((closest, p) => 
+        Math.abs(p.mL - mL_max) < Math.abs(closest.mL - mL_max) ? p : closest
+      );
+      
+      // 返回左右边界中较高的吸光度值
+      return {
+        leftValue: leftPoint.value,
+        rightValue: rightPoint.value,
+        baseline: Math.max(leftPoint.value, rightPoint.value)
+      };
+    }
+
+    function findPeakEdges(points, peakPoint, threshold) {
+      const peakIndex = points.findIndex(p => p.id === peakPoint.id);
+      let leftEdge, rightEdge;
+
+      // 向左查找左边界
+      for (let i = peakIndex; i >= 0; i--) {
+        if (points[i].value <= threshold || i === 0) {
+          leftEdge = points[i];
+          break;
+        }
+      }
+
+      // 向右查找右边界
+      for (let i = peakIndex; i < points.length; i++) {
+        if (points[i].value <= threshold || i === points.length - 1) {
+          rightEdge = points[i];
+          break;
+        }
+      }
+
+      if (!leftEdge || !rightEdge) {
+        throw new Error("无法确定峰边界（尝试扩大框选范围）");
+      }
+
+      return { leftEdge, rightEdge };
+    }
+
+    function displayResults(baseline, peakPoint, threshold, leftEdge, rightEdge) {
+      // 计算拖尾因子
+      const W_05h = rightEdge.mL - leftEdge.mL;
+      const d = peakPoint.mL - leftEdge.mL;
+      const T = (W_05h / (2 * d)).toFixed(3);
+      
+      // 判断峰形
+      let judgment = "";
+      if (T >= 0.95 && T <= 1.05) judgment = "✅ 对称峰";
+      else if (T > 1.05) judgment = "🔴 拖尾峰";
+      else judgment = "🔴 前延峰";
+
+      updateResult(`
+        <div class="card success-card">
+          <strong>拖尾因子 T = ${T}</strong><br><strong>${judgment}</strong> （标准范围：0.95-1.05）
+        </div>
+        <div class="card">
+          <strong>峰顶点：</strong> ${peakPoint.mL.toFixed(2)} mL，吸光度： ${peakPoint.value.toFixed(2)}
+        </div>
+        <div class="card">
+          <strong>峰范围：</strong> ${leftEdge.mL.toFixed(2)} - ${rightEdge.mL.toFixed(2)} mL
+        </div>
+        <div class="card success-card">
+          <strong>萱萱你真棒！૮꒰˶ฅ́˘ฅ̀˶꒱ა </strong> 
+        </div>
+      `);
+    }
+
+    // 修改后的可视化函数
+    function visualizeResults(points, baseline, peakPoint, leftEdge, rightEdge, threshold) {
+      // 清除旧标记
+      tailingLinesGroup.selectAll("*").remove();
+      
+      // 先绘制分析区域（确保在底层）
+      const areaGenerator = d3.area()
+        .x(d => xScale(d.mL))
+        .y0(yScale(0))
+        .y1(d => yScale(d.value))
+        .curve(d3.curveCatmullRom.alpha(0.1));
+      
+      tailingLinesGroup.append("path")
+        .attr("class", "analysis-area")
+        .attr("d", areaGenerator(points));
+      
+      // 然后绘制其他辅助线
+      tailingLinesGroup.append("line")
+        .attr("class", "baseline")
+        .attr("x1", xScale(selectedRange.mL.min))
+        .attr("y1", yScale(baseline))
+        .attr("x2", xScale(selectedRange.mL.max))
+        .attr("y2", yScale(baseline));
+      
+      tailingLinesGroup.append("circle")
+        .attr("class", "peak-point")
+        .attr("cx", xScale(peakPoint.mL))
+        .attr("cy", yScale(peakPoint.value))
+        .attr("r", 5);
+      
+      tailingLinesGroup.append("line")
+        .attr("class", "threshold-line")
+        .attr("x1", xScale(leftEdge.mL))
+        .attr("y1", yScale(threshold))
+        .attr("x2", xScale(rightEdge.mL))
+        .attr("y2", yScale(threshold));
+      
+      tailingLinesGroup.append("line")
+        .attr("class", "vertical-line")
+        .attr("x1", xScale(peakPoint.mL))
+        .attr("y1", yScale(baseline))
+        .attr("x2", xScale(peakPoint.mL))
+        .attr("y2", yScale(peakPoint.value));
+      
+      tailingLinesGroup.append("circle")
+        .attr("class", "left-edge")
+        .attr("cx", xScale(leftEdge.mL))
+        .attr("cy", yScale(leftEdge.value))
+        .attr("r", 5);
+      
+      tailingLinesGroup.append("circle")
+        .attr("class", "right-edge")
+        .attr("cx", xScale(rightEdge.mL))
+        .attr("cy", yScale(rightEdge.value))
+        .attr("r", 5);
+    }
+
+    // 新增产物峰标注函数
+    function addPeakAnnotation(peakPoint) {
+      // 清除旧标注
+      peakAnnotationGroup.selectAll("*").remove();
+      
+      const width = 762 - margin.left - margin.right;
+      const height = 508 - margin.top - margin.bottom;
+      const yMin = yScale.domain()[0];
+      
+      // 添加峰顶点垂直线（黑色虚线）连接到基线
+      peakAnnotationGroup.append("line")
+        .attr("class", "peak-vertical-line")
+        .attr("x1", xScale(peakPoint.mL))
+        .attr("y1", yScale(yMin)) 
+        .attr("x2", xScale(peakPoint.mL))
+        .attr("y2", yScale(peakPoint.value));
+      
+      // 添加右侧水平线（黑色虚线）
+      peakAnnotationGroup.append("line")
+        .attr("class", "peak-horizontal-line")
+        .attr("x1", xScale(peakPoint.mL))
+        .attr("y1", yScale(peakPoint.value))
+        .attr("x2", xScale(peakPoint.mL) + 22)
+        .attr("y2", yScale(peakPoint.value));
+      
+      // 添加标注文字
+      peakAnnotationGroup.append("text")
+        .attr("class", "peak-annotation")
+        .attr("x", xScale(peakPoint.mL) + 27)
+        .attr("y", yScale(peakPoint.value) - 3)
+        .text(`${peakPoint.mL.toFixed(2)} mL`);
+    
+      peakAnnotationGroup.append("text")
+        .attr("class", "peak-annotation")
+        .attr("x", xScale(peakPoint.mL) + 27)
+        .attr("y", yScale(peakPoint.value) + 15)
+        .text(`${peakPoint.value.toFixed(0)} mAU`);
+    }
+
+    // 修改后的切换函数
+    function toggleTailingLines() {
+      showTailingLines = !showTailingLines;
+      tailingLinesGroup.style("display", showTailingLines ? null : "none");
+    }
+
+    function togglePeakAnnotation() {
+      showPeakAnnotation = !showPeakAnnotation;
+      peakAnnotationGroup.style("display", showPeakAnnotation ? null : "none");
+    }
+
+    // 工具函数
+    function getMousePosition(e) {
+      const rect = chartContainer.getBoundingClientRect();
+      return {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      };
+    }
+
+    function isInChartArea(pos) {
+      return chartArea && 
+             pos.x >= chartArea.left && 
+             pos.x <= chartArea.right && 
+             pos.y >= chartArea.top && 
+             pos.y <= chartArea.bottom;
+    }
+
+    function resetAnalysis() {
+      selectedRange = null;
+      isSelecting = false;
+      selectionBox.style.display = 'none';
+      document.getElementById('calculateBtn').disabled = true;
+      
+      // 重置开关状态
+      resetToggleButtons();
+      
+      // 清除分析标记
+      tailingLinesGroup.selectAll("*").remove();
+      peakAnnotationGroup.selectAll("*").remove();
+      
+      updateResult(`
+        <div class="card info-card">
+          已重置分析，请直接在图表上框选目标峰
+        </div>
+      `);
+      
+      // 重置后自动进入框选模式
+      startSelection();
+    }
+
+    function enableButtons() {
+      document.getElementById('selectBtn').disabled = false;
+      document.getElementById('resetBtn').disabled = false;
+    }
+
+    function showLoading(msg) {
+      document.getElementById('loader').style.display = 'block';
+      updateResult(`
+        <div class="card info-card">
+          ${msg}
+        </div>
+      `);
+    }
+
+    function hideLoading() {
+      document.getElementById('loader').style.display = 'none';
+    }
+
+    function updateResult(html) {
+      document.getElementById('result-container').innerHTML = html;
+    }
+
+    function showError(msg) {
+      updateResult(`
+        <div class="card error-card">
+          ⚠️ ${msg}
+        </div>
+      `);
+      hideLoading();
+    }
+  </script>
+</body>
+</html>
