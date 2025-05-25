@@ -13,6 +13,60 @@
       line-height: 1.6;
       color: #000000;
     }
+
+    .celebration-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 1000;
+        overflow: hidden;
+    }
+
+    .confetti {
+        position: absolute;
+        width: 12px;
+        height: 6px;
+        opacity: 0.7;
+        animation: fall linear forwards;
+        transform-origin: center;
+    }
+
+    .star {
+        position: absolute;
+        width: 16px;
+        height: 16px;
+        background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23F8E9A1"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>') no-repeat center center;
+        background-size: contain;
+        opacity: 0.8;
+        animation: fall linear forwards;
+        transform-origin: center;
+}
+
+    .ball {
+        position: absolute;
+        border-radius: 50%;
+        opacity: 0.7;
+        animation: fall linear forwards;
+        transform-origin: center;
+    }
+
+    @keyframes fall {
+        from { 
+            transform: translateY(-100px) rotate(0deg); 
+        }
+        to { 
+            transform: translateY(calc(100vh + 100px)) rotate(360deg); 
+        }
+    }
+
+    .confetti, .star, .ball {
+        animation: fall linear forwards;
+        transform-origin: center;
+    }
+
     h1 { 
       text-align: center;
       font-size: 24px;
@@ -78,10 +132,7 @@
       animation: spin 1s linear infinite; 
       margin: 10px auto; 
     }
-    @keyframes spin { 
-      0% { transform: rotate(0deg); } 
-      100% { transform: rotate(360deg); } 
-    }
+
     .card {
       background: white;
       padding: 12px;
@@ -154,7 +205,7 @@
     .hidden-file-input {
       display: none;
     }
-    /* D3图表样式 */
+
     .axis path,
     .axis line {
       stroke: #000000;
@@ -203,7 +254,7 @@
       fill: #673AB7;
       stroke: none;
     }
-    /* 新增样式 */
+
     .peak-vertical-line {
       stroke: #000000;
       stroke-width: 3;
@@ -220,7 +271,7 @@
       font-weight: bold;
       fill: #000000;
     }
-    /* 新增滑动开关样式 */
+
     .toggle-switch {
       display: flex;
       align-items: center;
@@ -287,6 +338,7 @@
   </style>
 </head>
 <body>
+  <div id="celebration-container" class="celebration-container"></div>
   <h1>呱呱帮你画色谱峰</h1>
 
   <div class="control-row">
@@ -299,7 +351,6 @@
     <button id="calculateBtn" disabled>计算拖尾因子</button>
     <button id="resetBtn" disabled>重置分析</button>
     
-    <!-- 替换为滑动开关 -->
     <div class="toggle-switch">
       <div class="toggle-container active" id="toggleTailingLines">
         <div class="toggle-thumb"></div>
@@ -333,7 +384,6 @@
   </div>
 
   <script>
-    // 核心变量
     let peakData = [];
     let isSelecting = false;
     let selectionStart = { x: 0, y: 0 };
@@ -344,14 +394,12 @@
     let svg;
     const margin = {top: 40, right: 130, bottom: 160, left: 140};
     
-    // 新增变量
     let showTailingLines = true;
     let showPeakAnnotation = true;
     let peakAnnotationGroup;
     let tailingLinesGroup;
     let baselineValue = 0;
 
-    // 文件上传与解析
     document.getElementById('fileInput').addEventListener('change', function(e) {
       const file = e.target.files[0];
       const fileNameDisplay = document.getElementById('fileNameDisplay');
@@ -379,7 +427,6 @@
               return;
             }
 
-            // 重置开关状态
             resetToggleButtons();
             
             hideLoading();
@@ -390,19 +437,19 @@
                 画好了喵，请直接在图表上框选产物峰区域
               </div>
             `);
-            // 自动进入框选模式
+
             startSelection();
           },
           error: function(err) {
-            showError("文件解析失败：" + err.message);
+            showError("看不懂喵！" + err.message);
           }
         });
       } else {
-        fileNameDisplay.textContent = '未选择文件';
+        fileNameDisplay.textContent = '请上传文件喵！';
       }
     });
 
-    // 重置开关状态函数
+
     function resetToggleButtons() {
       const tailingToggle = document.getElementById('toggleTailingLines');
       const peakToggle = document.getElementById('togglePeakAnnotation');
@@ -413,7 +460,6 @@
       showTailingLines = true;
       showPeakAnnotation = true;
       
-      // 确保辅助线显示
       if (tailingLinesGroup) {
         tailingLinesGroup.style("display", null);
       }
@@ -422,26 +468,20 @@
       }
     }
 
-    // 图表初始化
     function initChart(data) {
-      // 清除现有图表
       clearSVG();
       
-      // 设置绘图区尺寸
       const width = 762 - margin.left - margin.right;
       const height = 508 - margin.top - margin.bottom;
       
-      // 计算坐标范围
       const xExtent = d3.extent(data, d => d.mL);
       const yMax = d3.max(data, d => d.value) * 1.1;
       const yNegativeOffset = yMax * 0.1;
       const yExtent = [-yNegativeOffset, yMax];
       
-      // 计算合适的轴范围和刻度
       const xRange = { min: 0, max: 28, step: 2 };
       const yRange = calculateNiceRange(yExtent[0], yExtent[1]);
       
-      // 创建缩放比例
       xScale = d3.scaleLinear()
           .domain([xRange.min, xRange.max])
           .range([0, width]);
@@ -450,7 +490,6 @@
           .domain([yRange.min, yRange.max])
           .range([height, 0]);
       
-      // 创建主绘图区
       svg = d3.select("#chart-svg")
           .attr("width", 762)
           .attr("height", 508);
@@ -458,11 +497,9 @@
       chartGroup = svg.append("g")
           .attr("transform", `translate(${margin.left},${margin.top})`);
       
-      // 先创建拖尾因子辅助线组（确保在底层）
       tailingLinesGroup = chartGroup.append("g")
           .attr("class", "tailing-lines-group");
       
-      // 创建折线（确保数据线在辅助线上方）
       const line = d3.line()
           .x(d => xScale(d.mL))
           .y(d => yScale(d.value))
@@ -473,7 +510,6 @@
           .attr("class", "data-line")
           .attr("d", line);
       
-      // 创建X轴
       const xTicks = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28];
       
       const xAxis = d3.axisBottom(xScale)
@@ -489,7 +525,6 @@
           .selectAll("text")
           .style("text-anchor", "middle");
       
-      // 创建Y轴
       const yAxis = d3.axisLeft(yScale)
           .tickValues(d3.range(0, yRange.max + yRange.step, yRange.step))
           .tickFormat(d3.format('d')) 
@@ -500,7 +535,6 @@
           .attr("class", "axis line")
           .call(yAxis);
       
-      // 添加轴标签
       svg.append("text")
           .attr("class", "x-axis-label")
           .attr("x", width / 2 + margin.left)
@@ -522,7 +556,6 @@
           .style("font-size", "20px")
           .style("font-weight", "bold");
       
-      // 设置chartArea用于后续交互
       chartArea = {
         left: margin.left,
         right: margin.left + width,
@@ -530,12 +563,10 @@
         bottom: margin.top + height
       };
       
-      // 创建产物峰标注组（确保在最上层）
       peakAnnotationGroup = chartGroup.append("g")
           .attr("class", "peak-annotation-group");
     }
 
-    // 清除所有子元素
     function clearSVG() {
       const chartSvg = document.getElementById('chart-svg');
       while (chartSvg.firstChild) {
@@ -543,7 +574,6 @@
       }
     }
     
-    // 计算合适的轴范围和刻度
     function calculateNiceRange(min, max, isXAxis = false) {
       const range = max - min;
       const targetTicks = isXAxis ? 4 : 2;
@@ -584,12 +614,10 @@
       };
     }
 
-    // 框选交互逻辑
     document.getElementById('selectBtn').addEventListener('click', startSelection);
     document.getElementById('resetBtn').addEventListener('click', resetAnalysis);
     document.getElementById('calculateBtn').addEventListener('click', performAnalysis);
     
-    // 修改切换按钮事件监听
     document.getElementById('toggleTailingLines').addEventListener('click', function() {
       this.classList.toggle('active');
       toggleTailingLines();
@@ -610,7 +638,6 @@
       `);
     }
 
-    // 鼠标事件处理
     const chartContainer = document.getElementById('chart-container');
     const selectionBox = document.getElementById('selection-box');
 
@@ -648,12 +675,10 @@
       if (!isInChartArea(endPos) || 
           Math.abs(endPos.x - selectionStart.x) < 10 || 
           Math.abs(endPos.y - selectionStart.y) < 10) {
-        // 直接重新开始框选，不显示错误
         selectionBox.style.display = 'none';
         return;
       }
 
-      // 转换为SVG坐标
       const svgRect = document.getElementById('chart-svg').getBoundingClientRect();
       const containerRect = chartContainer.getBoundingClientRect();
       
@@ -662,7 +687,6 @@
       const svgY1 = selectionStart.y - (svgRect.top - containerRect.top);
       const svgY2 = endPos.y - (svgRect.top - containerRect.top);
 
-      // 转换为数据坐标
       selectedRange = {
         mL: {
           min: xScale.invert(Math.min(svgX1 - margin.left, svgX2 - margin.left)),
@@ -685,7 +709,6 @@
       `);
     });
 
-    // 核心分析逻辑
     function performAnalysis() {
       if (!selectedRange || !peakData.length) {
         showError("请先框选目标峰区域");
@@ -694,12 +717,10 @@
 
       showLoading("正在分析...");
       
-      // 自动隐藏框选框
       document.getElementById('selection-box').style.display = 'none';
       
       setTimeout(() => {
         try {
-          // 获取框选范围内的点
           const points = peakData.filter(p => 
             p.mL >= selectedRange.mL.min && 
             p.mL <= selectedRange.mL.max
@@ -709,45 +730,35 @@
             throw new Error("框选范围内数据点不足（至少需要3个点）");
           }
 
-          // 获取边界值
           const { baseline, leftValue, rightValue } = getBoundaryValues(
             points, 
             selectedRange.mL.min, 
             selectedRange.mL.max
           );
           
-          // 保存基线值用于垂直线绘制
           baselineValue = baseline;
 
-          // 找到峰顶点
           const peakPoint = points.reduce((max, p) => 
             p.value > max.value ? p : max
           );
 
-          // 验证基线合理性
           if (baseline >= peakPoint.value * 0.9) {
             throw new Error(`基线值${baseline}过高，可能误取峰顶`);
           }
 
-          // 计算5%高度阈值
           const threshold = baseline + (peakPoint.value - baseline) * 0.05;
           
-          // 查找边界点
           const { leftEdge, rightEdge } = findPeakEdges(points, peakPoint, threshold);
           
-          // 计算并显示结果
           displayResults(baseline, peakPoint, threshold, leftEdge, rightEdge);
           
-          // 可视化标记
           visualizeResults(points, baseline, peakPoint, leftEdge, rightEdge, threshold);
           
-          // 添加产物峰标注
           addPeakAnnotation(peakPoint);
           
         } catch (e) {
           console.error("分析错误:", e);
           showError("分析失败：" + (e.message || "未知错误"));
-          // 分析失败后自动重新开始框选
           startSelection();
         } finally {
           hideLoading();
@@ -755,19 +766,15 @@
       }, 100);
     }
 
-    // 关键函数
     function getBoundaryValues(points, mL_min, mL_max) {
-      // 找到最接近左边界的点
       const leftPoint = points.reduce((closest, p) => 
         Math.abs(p.mL - mL_min) < Math.abs(closest.mL - mL_min) ? p : closest
       );
       
-      // 找到最接近右边界的点
       const rightPoint = points.reduce((closest, p) => 
         Math.abs(p.mL - mL_max) < Math.abs(closest.mL - mL_max) ? p : closest
       );
       
-      // 返回左右边界中较高的吸光度值
       return {
         leftValue: leftPoint.value,
         rightValue: rightPoint.value,
@@ -779,7 +786,6 @@
       const peakIndex = points.findIndex(p => p.id === peakPoint.id);
       let leftEdge, rightEdge;
 
-      // 向左查找左边界
       for (let i = peakIndex; i >= 0; i--) {
         if (points[i].value <= threshold || i === 0) {
           leftEdge = points[i];
@@ -787,7 +793,6 @@
         }
       }
 
-      // 向右查找右边界
       for (let i = peakIndex; i < points.length; i++) {
         if (points[i].value <= threshold || i === points.length - 1) {
           rightEdge = points[i];
@@ -796,46 +801,98 @@
       }
 
       if (!leftEdge || !rightEdge) {
-        throw new Error("无法确定峰边界（尝试扩大框选范围）");
+        throw new Error("无法确定峰边界喵，试试扩大框选范围？");
       }
 
       return { leftEdge, rightEdge };
     }
 
-    function displayResults(baseline, peakPoint, threshold, leftEdge, rightEdge) {
-      // 计算拖尾因子
-      const W_05h = rightEdge.mL - leftEdge.mL;
-      const d = peakPoint.mL - leftEdge.mL;
-      const T = (W_05h / (2 * d)).toFixed(3);
-      
-      // 判断峰形
-      let judgment = "";
-      if (T >= 0.95 && T <= 1.05) judgment = "✅ 对称峰";
-      else if (T > 1.05) judgment = "🔴 拖尾峰";
-      else judgment = "🔴 前延峰";
+    function createCelebration() {
+        const container = document.getElementById('celebration-container');
+        container.innerHTML = ''; 
+    
+        const colors = ['#FFD6E0', '#C6E2FF', '#A8E6CF', '#D3BBDD', '#FFF2B2', '#FFD3B6', '#E0E0E0'];
+        const types = ['confetti', 'star', 'ball'];
+        const angles = [0, 15, 30, 45, 60, 75, 90, -15, -30, -45, -60, -75];
+        const totalElements = 170;
+    
+        for (let i = 0; i < totalElements; i++) {
+            setTimeout(() => {
+                const type = types[Math.floor(Math.random() * types.length)];
+                const element = document.createElement('div');
+                
+                const size = Math.random() * 12 + 6;
+                const left = Math.random() * 100;
+                const animationDuration = Math.random() * 2 + 2; // 2~4秒
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                const angle = angles[Math.floor(Math.random() * angles.length)];
+    
+                element.style.position = 'absolute';
+                element.style.left = `${left}%`;
+                element.style.top = '-20px';
+                element.style.animation = `fall ${animationDuration}s linear forwards`;
+                element.style.zIndex = '1000';
 
-      updateResult(`
-        <div class="card success-card">
-          <strong>拖尾因子 T = ${T}</strong><br><strong>${judgment}</strong> （标准范围：0.95-1.05）
-        </div>
-        <div class="card">
-          <strong>峰顶点：</strong> ${peakPoint.mL.toFixed(2)} mL，吸光度： ${peakPoint.value.toFixed(2)}
-        </div>
-        <div class="card">
-          <strong>峰范围：</strong> ${leftEdge.mL.toFixed(2)} - ${rightEdge.mL.toFixed(2)} mL
-        </div>
-        <div class="card success-card">
-          <strong>萱萱你真棒！૮꒰˶ฅ́˘ฅ̀˶꒱ა </strong> 
-        </div>
-      `);
+                if (type === 'confetti') {
+                    element.className = 'confetti';
+                    element.style.backgroundColor = color;
+                    element.style.width = `${size}px`;
+                    element.style.height = `${size / 2}px`;
+                    element.style.transform = `rotate(${angle}deg)`;
+                    element.style.borderRadius = '2px';
+                } else if (type === 'star') {
+                    element.className = 'star';
+                    element.style.width = `${size}px`;
+                    element.style.height = `${size}px`;
+                    element.style.filter = 'drop-shadow(0 0 2px rgba(255,255,255,0.5))';
+                } else if (type === 'ball') {
+                    element.className = 'ball';
+                    element.style.width = `${size}px`;
+                    element.style.height = `${size}px`;
+                    element.style.backgroundColor = color;
+                    element.style.boxShadow = '0 0 8px rgba(255,255,255,0.3)';
+                }
+
+                container.appendChild(element);
+
+                element.addEventListener('animationend', () => {
+                    element.remove();
+                });
+            }, Math.random() * 2000);
+        }
     }
 
-    // 修改后的可视化函数
+    function displayResults(baseline, peakPoint, threshold, leftEdge, rightEdge) {
+        const W_05h = rightEdge.mL - leftEdge.mL;
+        const d = peakPoint.mL - leftEdge.mL;
+        const T = (W_05h / (2 * d)).toFixed(3);
+
+        let judgment = "";
+        if (T >= 0.95 && T <= 1.05) judgment = "✅ 对称峰";
+        else if (T > 1.05) judgment = "🔴 拖尾峰";
+        else judgment = "🔴 前延峰";
+
+        createCelebration();
+
+        updateResult(`
+            <div class="card success-card">
+                <strong>拖尾因子 T = ${T}</strong><br><strong>${judgment}</strong> （标准范围：0.95-1.05）
+            </div>
+            <div class="card">
+                <strong>峰顶点：</strong> ${peakPoint.mL.toFixed(2)} mL，吸光度： ${peakPoint.value.toFixed(2)}
+            </div>
+            <div class="card">
+                <strong>峰范围：</strong> ${leftEdge.mL.toFixed(2)} - ${rightEdge.mL.toFixed(2)} mL
+            </div>
+            <div class="card success-card">
+                <strong>萱萱你真棒！૮꒰˶ฅ́˘ฅ̀˶꒱ა </strong> 
+            </div>
+        `);
+    }
+
     function visualizeResults(points, baseline, peakPoint, leftEdge, rightEdge, threshold) {
-      // 清除旧标记
       tailingLinesGroup.selectAll("*").remove();
-      
-      // 先绘制分析区域（确保在底层）
+
       const areaGenerator = d3.area()
         .x(d => xScale(d.mL))
         .y0(yScale(0))
@@ -845,8 +902,7 @@
       tailingLinesGroup.append("path")
         .attr("class", "analysis-area")
         .attr("d", areaGenerator(points));
-      
-      // 然后绘制其他辅助线
+
       tailingLinesGroup.append("line")
         .attr("class", "baseline")
         .attr("x1", xScale(selectedRange.mL.min))
@@ -887,32 +943,27 @@
         .attr("r", 5);
     }
 
-    // 新增产物峰标注函数
     function addPeakAnnotation(peakPoint) {
-      // 清除旧标注
       peakAnnotationGroup.selectAll("*").remove();
       
       const width = 762 - margin.left - margin.right;
       const height = 508 - margin.top - margin.bottom;
       const yMin = yScale.domain()[0];
       
-      // 添加峰顶点垂直线（黑色虚线）连接到基线
       peakAnnotationGroup.append("line")
         .attr("class", "peak-vertical-line")
         .attr("x1", xScale(peakPoint.mL))
         .attr("y1", yScale(yMin)) 
         .attr("x2", xScale(peakPoint.mL))
         .attr("y2", yScale(peakPoint.value));
-      
-      // 添加右侧水平线（黑色虚线）
+
       peakAnnotationGroup.append("line")
         .attr("class", "peak-horizontal-line")
         .attr("x1", xScale(peakPoint.mL))
         .attr("y1", yScale(peakPoint.value))
         .attr("x2", xScale(peakPoint.mL) + 22)
         .attr("y2", yScale(peakPoint.value));
-      
-      // 添加标注文字
+
       peakAnnotationGroup.append("text")
         .attr("class", "peak-annotation")
         .attr("x", xScale(peakPoint.mL) + 27)
@@ -926,7 +977,6 @@
         .text(`${peakPoint.value.toFixed(0)} mAU`);
     }
 
-    // 修改后的切换函数
     function toggleTailingLines() {
       showTailingLines = !showTailingLines;
       tailingLinesGroup.style("display", showTailingLines ? null : "none");
@@ -937,7 +987,6 @@
       peakAnnotationGroup.style("display", showPeakAnnotation ? null : "none");
     }
 
-    // 工具函数
     function getMousePosition(e) {
       const rect = chartContainer.getBoundingClientRect();
       return {
@@ -959,21 +1008,18 @@
       isSelecting = false;
       selectionBox.style.display = 'none';
       document.getElementById('calculateBtn').disabled = true;
-      
-      // 重置开关状态
+
       resetToggleButtons();
-      
-      // 清除分析标记
+
       tailingLinesGroup.selectAll("*").remove();
       peakAnnotationGroup.selectAll("*").remove();
       
       updateResult(`
         <div class="card info-card">
-          已重置分析，请直接在图表上框选目标峰
+          已重置分析，请直接在图表上框选目标峰喵
         </div>
       `);
       
-      // 重置后自动进入框选模式
       startSelection();
     }
 
